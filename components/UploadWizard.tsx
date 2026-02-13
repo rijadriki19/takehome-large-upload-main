@@ -35,7 +35,7 @@ export default function UploadWizard() {
     !!file &&
     validationStatus === "passed" &&
     (status === "idle" || status === "error" || status === "canceled" || status === "done")
-  const isBusy = status === "uploading" || status === "finalizing"
+  const isBusy = status === "initializing" || status === "uploading" || status === "finalizing"
 
   const runValidation = useCallback(async (nextFile: File) => {
     setValidationStatus("running")
@@ -93,6 +93,7 @@ export default function UploadWizard() {
     if (!file) return "Select a CSV file to begin."
     if (validationStatus === "running") return "Validating the selected file."
     if (validationStatus === "failed") return "File validation failed. Please review the message below."
+    if (status === "initializing") return "Setting up a secure upload session with the server."
     if (status === "uploading") return "Uploading the file in chunks. Please keep this tab open."
     if (status === "finalizing") return "Finalizing the upload and preparing a preview."
     if (status === "done") return "Upload complete. You can open the preview."
@@ -136,7 +137,7 @@ export default function UploadWizard() {
     // Upload + later phases only make sense once validation passed.
     if (validationStatus !== "passed") return result
 
-    if (status === "uploading") {
+    if (status === "initializing" || status === "uploading") {
       result.upload = "active"
     } else if (status === "finalizing" || status === "done") {
       result.upload = "done"
