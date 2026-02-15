@@ -211,6 +211,9 @@ export default function DataPreviewTable() {
                       padding: 6,
                       borderBottom: "1px solid #e5e7eb",
                       whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: 140,
                       position: "sticky",
                       top: 0,
                       background: "#f9fafb",
@@ -237,7 +240,11 @@ export default function DataPreviewTable() {
                           padding: 6,
                           borderBottom: "1px solid #f3f4f6",
                           whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          maxWidth: 140,
                           color: isEmpty ? "#9ca3af" : "#111827",
+                          backgroundColor: isEmpty ? "yellow" : "#ffffff",
                           fontStyle: isEmpty ? "italic" : "normal",
                         }}
                         title={isEmpty ? "(empty)" : String(value)}

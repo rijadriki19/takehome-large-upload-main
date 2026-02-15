@@ -33,3 +33,36 @@ export async function writeAssembled(sessionId: string, bytes: Buffer) {
   return out
 }
 
+/** Read only the first maxBytes of assembled.csv. Use for fast preview without loading full file. */
+export async function readAssembledSlice(sessionId: string, maxBytes: number): Promise<Buffer | null> {
+  const filePath = path.join(DATA_DIR, sessionId, "assembled.csv")
+  const fd = await fs.open(filePath, "r").catch(() => null)
+  if (!fd) return null
+  try {
+    const buffer = Buffer.alloc(Math.min(maxBytes, (await fd.stat()).size))
+    const { bytesRead } = await fd.read(buffer, 0, buffer.length, 0)
+    return buffer.subarray(0, bytesRead)
+  } finally {
+    await fd.close()
+  }
+}
+
+/** Read only the first maxBytes from chunks (in order). Use for preview when assembled doesn't exist yet. */
+export async function readChunksSlice(
+  sessionId: string,
+  maxBytes: number,
+): Promise<Buffer> {
+  const files = await listChunks(sessionId)
+  const parts: Buffer[] = []
+  let total = 0
+  for (const f of files) {
+    if (total >= maxBytes) break
+    const chunk = await readChunk(sessionId, f)
+    const needed = maxBytes - total
+    parts.push(chunk.length <= needed ? chunk : chunk.subarray(0, needed))
+    total += chunk.length
+    if (chunk.length > needed) break
+  }
+  return Buffer.concat(parts)
+}
+
