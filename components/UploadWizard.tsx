@@ -37,38 +37,89 @@ export default function UploadWizard() {
     (status === "idle" || status === "error" || status === "canceled" || status === "done")
   const isBusy = status === "initializing" || status === "uploading" || status === "finalizing"
 
-  const runValidation = useCallback(async (nextFile: File) => {
-    setValidationStatus("running")
-    setValidationMessage("Checking that this looks like a CSV we can safely upload…")
+ const runValidation = useCallback(async (nextFile: File) => {
+  setValidationStatus("running")
+  setValidationMessage("Checking that this looks like a CSV we can safely upload…")
 
-    try {
-      const lowerName = nextFile.name.toLowerCase()
-      if (!lowerName.endsWith(".csv")) {
-        setValidationStatus("failed")
-        setValidationMessage("This file does not have a .csv extension. Please choose a CSV file.")
-        return
-      }
+  try {
+    const lowerName = nextFile.name.toLowerCase()
+    if (!lowerName.endsWith(".csv")) {
+      setValidationStatus("failed")
+      setValidationMessage("This file does not have a .csv extension. Please choose a CSV file.")
+      return
+    }
 
-      // Lightweight content check: read a small slice so we don't load the full file into memory.
-      await nextFile.slice(0, 200_000).text()
+    const firstChunk = await nextFile.slice(0, 200_000).text()
+    const lines = firstChunk.split(/\r?\n/).filter(Boolean)
 
-      const sizeMb = nextFile.size / (1024 * 1024)
-      const sizeNote =
-        sizeMb < 5
-          ? "This is a small file, it should upload quickly."
-          : sizeMb > 200
-          ? "This is a very large file; it may take a while to upload."
-          : "This is a typical size for large CSV uploads."
+    if (lines.length < 2) {
+      setValidationStatus("failed")
+      setValidationMessage("CSV must contain a header row and at least one data row.")
+      return
+    }
 
-      setValidationStatus("passed")
-      setValidationMessage(`File looks like a valid CSV. ${sizeNote}`)
-    } catch (_err) {
+    const headers = lines[0].split(",").map(h => h.trim())
+    const expectedColumnCount = headers.length
+
+    // Empty header names
+    const emptyHeaders = headers.filter(h => h === "")
+    if (emptyHeaders.length > 0) {
+      setValidationStatus("failed")
+      setValidationMessage("One or more column headers are empty. Please provide names for all columns.")
+      return
+    }
+
+    // Duplicate headers
+    const seen = new Set<string>()
+    const duplicates: string[] = []
+
+    for (const h of headers) {
+      if (seen.has(h)) duplicates.push(h)
+      seen.add(h)
+    }
+
+    if (duplicates.length > 0) {
       setValidationStatus("failed")
       setValidationMessage(
-        "We could not read this file in the browser. Please confirm it is a CSV and try selecting it again.",
+        `Duplicate column names detected: ${[...new Set(duplicates)].join(", ")}. 
+Please ensure all column headers are unique before uploading.`
       )
+      return
     }
-  }, [])
+
+    // ----- ROW WIDTH VALIDATION (first 50 rows only) -----
+    const MAX_ROWS_TO_CHECK = 50
+    for (let i = 1; i < Math.min(lines.length, MAX_ROWS_TO_CHECK + 1); i++) {
+      const rowColumns = lines[i].split(",")
+
+      if (rowColumns.length !== expectedColumnCount) {
+        setValidationStatus("failed")
+        setValidationMessage(
+          `Row ${i + 1} has ${rowColumns.length} columns, but the header defines ${expectedColumnCount}. 
+Please ensure every row has exactly ${expectedColumnCount} columns.`
+        )
+        return
+      }
+    }
+
+    const sizeMb = nextFile.size / (1024 * 1024)
+    const sizeNote =
+      sizeMb < 5
+        ? "This is a small file, it should upload quickly."
+        : sizeMb > 200
+        ? "This is a very large file; it may take a while to upload."
+        : "This is a typical size for large CSV uploads."
+
+    setValidationStatus("passed")
+    setValidationMessage(`File looks structurally valid (${expectedColumnCount} columns detected). ${sizeNote}`)
+  } catch (_err) {
+    setValidationStatus("failed")
+    setValidationMessage(
+      "We could not read this file in the browser. Please confirm it is a CSV and try selecting it again."
+    )
+  }
+}, [])
+
 
   const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const nextFile = e.target.files?.[0] ?? null
